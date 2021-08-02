@@ -69,6 +69,8 @@ void RunTest()
     for_each(v.begin(), v.end(), [](shared_ptr<Controller> &p)
     {
         wcout << L"use_count = " << p.use_count() << endl;
+        p->CheckStatuses();
+        
     });
 }
 
