@@ -20,23 +20,35 @@ class WaitingVehicles
 public:
     WaitingVehicles() {}
 
-    void printIDs()
+    bool dataIsAvailable()
     {
-        std::lock_guard<std::mutex> myLock(_mutex); // lock is released when myLock goes out of scope
-        for(auto &v : _vehicles)
-            std::cout << "   Vehicle #" << v.getID() << " is now waiting in the queue" << std::endl;
-        
+        std::lock_guard<std::mutex> myLock(_mutex);
+        return !_vehicles.empty();
+    }
+
+    Vehicle popBack()
+    {
+        // perform vector modification under the lock
+        std::lock_guard<std::mutex> uLock(_mutex);
+
+        // remove last vector element from queue
+        Vehicle v = std::move(_vehicles.back());
+        _vehicles.pop_back();
+
+        return v; // will not be copied due to return value optimization (RVO) in C++
     }
 
     void pushBack(Vehicle &&v)
     {
+        // simulate some work
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
         // perform vector modification under the lock
         std::lock_guard<std::mutex> uLock(_mutex);
-        std::cout << "   Vehicle #" << v.getID() << " will be added to the queue" << std::endl; 
-        _vehicles.emplace_back(std::move(v));
 
-        // simulate some work
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // add vector to queue
+        std::cout << "   Vehicle #" << v.getID() << " will be added to the queue" << std::endl;
+        _vehicles.emplace_back(std::move(v));
     }
 
 private:
@@ -58,12 +70,21 @@ int main()
         futures.emplace_back(std::async(std::launch::async, &WaitingVehicles::pushBack, queue, std::move(v)));
     }
 
+    std::cout << "Collecting results..." << std::endl;
+    while (true)
+    {
+        if (queue->dataIsAvailable())
+        {
+            Vehicle v = queue->popBack();
+            std::cout << "   Vehicle #" << v.getID() << " has been removed from the queue" << std::endl;
+        }
+    }
+
     std::for_each(futures.begin(), futures.end(), [](std::future<void> &ftr) {
         ftr.wait();
     });
 
-    std::cout << "Collecting results..." << std::endl;
-    queue->printIDs();
+    std::cout << "Finished processing queue" << std::endl;
 
     return 0;
 }
